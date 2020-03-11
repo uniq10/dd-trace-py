@@ -179,7 +179,7 @@ class Tracer(object):
     def configure(self, enabled=None, hostname=None, port=None, uds_path=None, https=None,
                   sampler=None, context_provider=None, wrap_executor=None, priority_sampling=None,
                   settings=None, collect_metrics=None, dogstatsd_host=None, dogstatsd_port=None,
-                  dogstatsd_url=None):
+                  dogstatsd_url=None, writer=None):
         """
         Configure an existing Tracer the easy way.
         Allow to configure or reconfigure a Tracer instance.
@@ -229,7 +229,9 @@ class Tracer(object):
             self.log.debug('Connecting to DogStatsd(%s)', dogstatsd_url)
             self._dogstatsd_client = DogStatsd(**dogstatsd_kwargs)
 
-        if hostname is not None or port is not None or uds_path is not None or https is not None or \
+        if writer:
+            self.writer = writer
+        elif hostname is not None or port is not None or uds_path is not None or https is not None or \
                 filters is not None or priority_sampling is not None or sampler is not None:
             # Preserve hostname and port when overriding filters or priority sampling
             # This is clumsy and a good reason to get rid of this configure() API

@@ -1,11 +1,14 @@
 # stdlib
 import itertools
+import json
 import random
+import sys
 import time
 
 from .. import api
 from .. import _worker
 from ..internal.logger import get_logger
+from ..encoding import JSONEncoder
 from ..sampler import BasePrioritySampler
 from ..settings import config
 from ..vendor import monotonic
@@ -18,6 +21,23 @@ MAX_TRACES = 1000
 
 DEFAULT_TIMEOUT = 5
 LOG_ERR_INTERVAL = 60
+
+
+class LogWriter:
+    def __init__(self, out=sys.stdout, dogstatsd=None):
+        self.dogstatsd = dogstatsd
+        self.out = sys.stdout
+        self.encoder = JSONEncoder()
+
+    def recreate(self):
+        return LogWriter(out=self.out, dogstatsd=self.dogstatsd)
+
+    def write(self, spans=None, services=None):
+        # TODO: Emit health metrics
+        encoded = self.encoder.encode_trace(spans)
+        self.out.write(encoded)
+        self.out.write("\n")
+        self.out.flush()
 
 
 class AgentWriter(_worker.PeriodicWorkerThread):
