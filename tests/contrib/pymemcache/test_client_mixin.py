@@ -1,5 +1,4 @@
 # 3p
-import unittest
 import pymemcache
 
 # project
@@ -10,8 +9,7 @@ from ddtrace.ext import memcached as memcachedx, net
 from .utils import MockSocket
 
 from tests.test_tracer import get_dummy_tracer
-from ...base import override_config
-from ...utils import assert_is_measured
+from ...base import BaseTracerTestCase, override_config
 
 
 _Client = pymemcache.client.base.Client
@@ -20,7 +18,7 @@ TEST_HOST = 'localhost'
 TEST_PORT = 117711
 
 
-class PymemcacheClientTestCaseMixin(unittest.TestCase):
+class PymemcacheClientTestCaseMixin(BaseTracerTestCase):
     """ Tests for a patched pymemcache.client.base.Client. """
 
     def get_spans(self):
@@ -35,7 +33,7 @@ class PymemcacheClientTestCaseMixin(unittest.TestCase):
         self.assertEqual(num_expected, len(spans))
 
         for span, resource, query in zip(spans, resources_expected, queries_expected):
-            assert_is_measured(span)
+            self.assert_is_not_measured(span)
             self.assertEqual(span.get_tag(net.TARGET_HOST), TEST_HOST)
             self.assertEqual(span.get_metric(net.TARGET_PORT), TEST_PORT)
             self.assertEqual(span.name, memcachedx.CMD)

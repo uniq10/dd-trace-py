@@ -1,9 +1,10 @@
 import pymemcache
-import unittest
 from ddtrace.vendor import wrapt
 
+from ....base import BaseTracerTestCase
 
-class AutoPatchTestCase(unittest.TestCase):
+
+class AutoPatchTestCase(BaseTracerTestCase):
     """Test ensuring that ddtrace-run patches pymemcache.
 
     This ensures that things like the patch functions are properly exported
