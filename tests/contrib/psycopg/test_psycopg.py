@@ -18,7 +18,6 @@ from ddtrace import Pin
 from tests.opentracer.utils import init_tracer
 from tests.contrib.config import POSTGRES_CONFIG
 from ...base import BaseTracerTestCase
-from ...utils import assert_is_measured
 from ...utils.tracer import DummyTracer
 
 
@@ -134,7 +133,7 @@ class PsycopgCore(BaseTracerTestCase):
             ),
         )
         root = self.get_root_span()
-        assert_is_measured(root)
+        self.assert_is_not_measured(root)
         self.assertIsNone(root.get_tag('sql.query'))
         self.reset()
 
@@ -158,7 +157,7 @@ class PsycopgCore(BaseTracerTestCase):
                 dict(name='postgres.query', resource=query, service='postgres', error=0, span_type='sql'),
             ),
         )
-        assert_is_measured(self.get_spans()[1])
+        self.assert_is_not_measured(self.get_spans()[1])
         self.reset()
 
         with self.override_config('dbapi2', dict(trace_fetch_methods=True)):
@@ -179,7 +178,7 @@ class PsycopgCore(BaseTracerTestCase):
                     dict(name='postgres.query.fetchall', resource=query, service='postgres', error=0, span_type='sql'),
                 ),
             )
-            assert_is_measured(self.get_spans()[1])
+            self.assert_is_not_measured(self.get_spans()[1])
 
     @skipIf(PSYCOPG2_VERSION < (2, 5), 'context manager not available in psycopg2==2.4')
     def test_cursor_ctx_manager(self):
@@ -194,7 +193,7 @@ class PsycopgCore(BaseTracerTestCase):
             assert len(rows) == 1, rows
             assert rows[0][0] == 'blah'
 
-        assert_is_measured(self.get_root_span())
+        self.assert_is_not_measured(self.get_root_span())
         self.assert_structure(
             dict(name='postgres.query'),
         )
@@ -289,7 +288,7 @@ class PsycopgCore(BaseTracerTestCase):
             assert rows[0][0] == 'one'
             assert rows[1][0] == 'two'
 
-        assert_is_measured(self.get_root_span())
+        self.assert_is_not_measured(self.get_root_span())
         self.assert_structure(
             dict(name='postgres.query', resource=query.as_string(db)),
         )
