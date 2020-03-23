@@ -16,7 +16,6 @@ from tests.opentracer.utils import init_tracer
 from ..config import MONGO_CONFIG
 from ...base import BaseTracerTestCase, override_config
 from ...test_tracer import get_dummy_tracer
-from ...utils import assert_is_measured
 
 
 class Artist(mongoengine.Document):
@@ -46,7 +45,7 @@ class MongoEngineCore(object):
         assert len(spans) == 1
         span = spans[0]
 
-        assert_is_measured(span)
+        self.assert_is_not_measured(span)
         assert span.resource == 'drop artist'
         assert span.span_type == 'mongodb'
         assert span.service == self.TEST_SERVICE
@@ -63,7 +62,7 @@ class MongoEngineCore(object):
         spans = tracer.writer.pop()
         assert len(spans) == 1
         span = spans[0]
-        assert_is_measured(span)
+        self.assert_is_not_measured(span)
         assert span.resource == 'insert artist'
         assert span.span_type == 'mongodb'
         assert span.service == self.TEST_SERVICE
@@ -83,7 +82,7 @@ class MongoEngineCore(object):
         spans = tracer.writer.pop()
         assert len(spans) == 1
         span = spans[0]
-        assert_is_measured(span)
+        self.assert_is_not_measured(span)
         assert span.resource == '{} artist'.format(name)
         assert span.span_type == 'mongodb'
         assert span.service == self.TEST_SERVICE
@@ -101,7 +100,7 @@ class MongoEngineCore(object):
         spans = tracer.writer.pop()
         assert len(spans) == 1
         span = spans[0]
-        assert_is_measured(span)
+        self.assert_is_not_measured(span)
         assert span.resource == '{} artist {{"first_name": "?"}}'.format(name)
         assert span.span_type == 'mongodb'
         assert span.service == self.TEST_SERVICE
@@ -116,7 +115,7 @@ class MongoEngineCore(object):
         spans = tracer.writer.pop()
         assert len(spans) == 1
         span = spans[0]
-        assert_is_measured(span)
+        self.assert_is_not_measured(span)
         assert span.resource == 'update artist {"_id": "?"}'
         assert span.span_type == 'mongodb'
         assert span.service == self.TEST_SERVICE
@@ -130,7 +129,7 @@ class MongoEngineCore(object):
         spans = tracer.writer.pop()
         assert len(spans) == 1
         span = spans[0]
-        assert_is_measured(span)
+        self.assert_is_not_measured(span)
         assert span.resource == 'delete artist {"_id": "?"}'
         assert span.span_type == 'mongodb'
         assert span.service == self.TEST_SERVICE
@@ -158,7 +157,7 @@ class MongoEngineCore(object):
         assert ot_span.name == 'ot_span'
         assert ot_span.service == 'my_svc'
 
-        assert_is_measured(dd_span)
+        self.assert_is_not_measured(dd_span)
         assert dd_span.resource == 'drop artist'
         assert dd_span.span_type == 'mongodb'
         assert dd_span.service == self.TEST_SERVICE
