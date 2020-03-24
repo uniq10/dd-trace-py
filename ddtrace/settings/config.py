@@ -112,7 +112,7 @@ class Config(object):
         """
         return self._http.header_is_traced(header_name)
 
-    def get_service(self, default=None):
+    def _get_service(self, default=None):
         """
         Returns the globally configured service.
 
