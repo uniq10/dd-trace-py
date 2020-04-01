@@ -42,3 +42,6 @@ class RootController(BaseController):
     def render_exception(self):
         render = get_render_fn()
         return render('/exception.mako')
+
+    def fn_who_shall_not_be_traced(self):
+        return 'i shall not be traced'

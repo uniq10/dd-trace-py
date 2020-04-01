@@ -1,12 +1,16 @@
-from ddtrace import config
 from ddtrace.vendor import wrapt
 import pylons.wsgiapp
 
-from ddtrace import tracer, Pin
+from ddtrace import config, tracer, Pin
 
 from .middleware import PylonsTraceMiddleware
 from ...utils.formats import asbool, get_env
 from ...utils.wrappers import unwrap as _u
+
+
+config._add("pylons", dict(
+    blacklisted_routes=[],
+))
 
 
 def patch():

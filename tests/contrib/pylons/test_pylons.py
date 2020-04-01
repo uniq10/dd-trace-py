@@ -433,3 +433,13 @@ class PylonsTestCase(BaseTracerTestCase):
         assert_span_http_status_code(dd_span, 200)
         assert dd_span.meta.get(http.URL) == 'http://localhost:80/'
         assert dd_span.error == 0
+
+    def test_blacklist(self):
+        self.app.get(url_for("/blacklistedroute"))
+        spans = self.tracer.writer.pop()
+        assert len(spans) == 1
+
+        with self.override_config("pylons", dict(blacklisted_routes=["/blacklistedroute"])):
+            self.app.get(url_for("/blacklistedroute"))
+        spans = self.tracer.writer.pop()
+        assert len(spans) == 0

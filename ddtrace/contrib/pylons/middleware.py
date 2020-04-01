@@ -32,6 +32,10 @@ class PylonsTraceMiddleware(object):
         trace_rendering()
 
     def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO")
+        if path in ddconfig.pylons.blacklisted_routes:
+            return self.app(environ, start_response)
+
         if self._distributed_tracing:
             # retrieve distributed tracing headers
             request = Request(environ)
@@ -90,7 +94,6 @@ class PylonsTraceMiddleware(object):
             finally:
                 controller = environ.get('pylons.routes_dict', {}).get('controller')
                 action = environ.get('pylons.routes_dict', {}).get('action')
-
                 # There are cases where users re-route requests and manually
                 # set resources. If this is so, don't do anything, otherwise
                 # set the resource to the controller / action that handled it.
