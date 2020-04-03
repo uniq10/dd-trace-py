@@ -52,11 +52,10 @@ required_modules = ['asyncio']
 with require_modules(required_modules) as missing_modules:
     if not missing_modules:
         from .provider import AsyncioContextProvider
-        from ...internal.context_manager import CONTEXTVARS_IS_AVAILABLE
-        from ...provider import DefaultContextProvider
+        from ...provider import ContextVarContextProvider, CONTEXTVARS_IS_AVAILABLE
 
         if CONTEXTVARS_IS_AVAILABLE:
-            context_provider = DefaultContextProvider()
+            context_provider = ContextVarContextProvider()
         else:
             context_provider = AsyncioContextProvider()
 

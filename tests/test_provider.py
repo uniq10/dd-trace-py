@@ -1,13 +1,13 @@
 import threading
 
 from ddtrace.context import Context
-from ddtrace.internal.context_manager import DefaultContextManager
+from ddtrace.provider import DefaultContextProvider
 from ddtrace.span import Span
 
-from ..base import BaseTestCase
+from tests.base import BaseTestCase
 
 
-class TestDefaultContextManager(BaseTestCase):
+class TestDefaultContextProvider(BaseTestCase):
     """
     Ensures that a ``ContextManager`` makes the Context
     local to each thread or task.
@@ -15,24 +15,24 @@ class TestDefaultContextManager(BaseTestCase):
     def test_get_or_create(self):
         # asking the Context multiple times should return
         # always the same instance
-        ctxm = DefaultContextManager()
-        assert ctxm.get() == ctxm.get()
+        ctxm = DefaultContextProvider()
+        assert ctxm.active() == ctxm.active()
 
     def test_set_context(self):
         # the Context can be set in the current Thread
         ctx = Context()
-        ctxm = DefaultContextManager()
-        assert ctxm.get() is not ctx
+        ctxm = DefaultContextProvider()
+        assert ctxm.active() is not ctx
 
-        ctxm.set(ctx)
-        assert ctxm.get() is ctx
+        ctxm.activate(ctx)
+        assert ctxm.active() is ctx
 
     def test_multiple_threads_multiple_context(self):
         # each thread should have it's own Context
-        ctxm = DefaultContextManager()
+        ctxm = DefaultContextProvider()
 
         def _fill_ctx():
-            ctx = ctxm.get()
+            ctx = ctxm.active()
             span = Span(tracer=None, name='fake_span')
             ctx.add_span(span)
             assert 1 == len(ctx._trace)
@@ -48,13 +48,13 @@ class TestDefaultContextManager(BaseTestCase):
 
         # the main instance should have an empty Context
         # because it has not been used in this thread
-        ctx = ctxm.get()
+        ctx = ctxm.active()
         assert 0 == len(ctx._trace)
 
     def test_reset_context_manager(self):
-        ctxm = DefaultContextManager()
-        ctx = ctxm.get()
+        ctxm = DefaultContextProvider()
+        ctx = ctxm.active()
 
         # new context manager should not share same context
-        ctxm = DefaultContextManager()
-        assert ctxm.get() is not ctx
+        ctxm = DefaultContextProvider()
+        assert ctxm.active() is not ctx

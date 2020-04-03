@@ -1,10 +1,18 @@
-import abc
-from ddtrace.vendor import six
+import threading
 
-from .internal.context_manager import DefaultContextManager
+from .context import Context
 
 
-class BaseContextProvider(six.with_metaclass(abc.ABCMeta)):
+try:
+    from contextvars import ContextVar
+
+    _DD_CONTEXTVAR = ContextVar("datadog_contextvar", default=None)
+    CONTEXTVARS_IS_AVAILABLE = True
+except ImportError:
+    CONTEXTVARS_IS_AVAILABLE = False
+
+
+class BaseContextProvider(object):
     """
     A ``ContextProvider`` is an interface that provides the blueprint
     for a callable class, capable to retrieve the current active
@@ -13,17 +21,18 @@ class BaseContextProvider(six.with_metaclass(abc.ABCMeta)):
     * the ``active`` method, that returns the current active ``Context``
     * the ``activate`` method, that sets the current active ``Context``
     """
-    @abc.abstractmethod
+
     def _has_active_context(self):
-        pass
+        raise NotImplementedError
 
-    @abc.abstractmethod
     def activate(self, context):
-        pass
+        raise NotImplementedError
 
-    @abc.abstractmethod
     def active(self):
-        pass
+        raise NotImplementedError
+
+    def reset(self):
+        raise NotImplementedError
 
     def __call__(self, *args, **kwargs):
         """Method available for backward-compatibility. It proxies the call to
@@ -32,14 +41,46 @@ class BaseContextProvider(six.with_metaclass(abc.ABCMeta)):
         return self.active()
 
 
-class DefaultContextProvider(BaseContextProvider):
+class ThreadContextProvider(BaseContextProvider):
+    """
+    ThreadLocalContext can be used as a tracer global reference to create
+    a different ``Context`` for each thread. In synchronous tracer, this
+    is required to prevent multiple threads sharing the same ``Context``
+    in different executions.
+    """
+    def __init__(self):
+        self._locals = threading.local()
+
+    def _has_active_context(self):
+        """
+        Determine whether we have a currently active context for this thread
+
+        :returns: Whether an active context exists
+        :rtype: bool
+        """
+        ctx = getattr(self._locals, "context", None)
+        return ctx is not None
+
+    def activate(self, context):
+        setattr(self._locals, "context", context)
+
+    def active(self):
+        ctx = getattr(self._locals, "context", None)
+        if not ctx:
+            ctx = Context()
+            self._locals.context = ctx
+
+        return ctx
+
+
+class ContextVarContextProvider(BaseContextProvider):
     """
     Default context provider that retrieves all contexts from the current
     thread-local storage. It is suitable for synchronous programming and
     Python WSGI frameworks.
     """
-    def __init__(self, reset_context_manager=True):
-        self._local = DefaultContextManager(reset=reset_context_manager)
+    def __init__(self):
+        _DD_CONTEXTVAR.set(None)
 
     def _has_active_context(self):
         """
@@ -48,17 +89,29 @@ class DefaultContextProvider(BaseContextProvider):
         :returns: Whether we have an active context
         :rtype: bool
         """
-        return self._local._has_active_context()
+        ctx = _DD_CONTEXTVAR.get()
+        return ctx is not None
 
     def activate(self, context):
         """Makes the given ``context`` active, so that the provider calls
         the thread-local storage implementation.
         """
-        return self._local.set(context)
+        _DD_CONTEXTVAR.set(context)
 
     def active(self):
         """Returns the current active ``Context`` for this tracer. Returned
         ``Context`` must be thread-safe or thread-local for this specific
         implementation.
         """
-        return self._local.get()
+        ctx = _DD_CONTEXTVAR.get()
+        if not ctx:
+            ctx = Context()
+            self.activate(ctx)
+
+        return ctx
+
+
+if CONTEXTVARS_IS_AVAILABLE:
+    DefaultContextProvider = ContextVarContextProvider
+else:
+    DefaultContextProvider = ThreadContextProvider
