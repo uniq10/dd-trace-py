@@ -154,6 +154,7 @@ class API(object):
             'Datadog-Meta-Lang-Version': PYTHON_VERSION,
             'Datadog-Meta-Lang-Interpreter': PYTHON_INTERPRETER,
             'Datadog-Meta-Tracer-Version': ddtrace.__version__,
+            "Connection": "keep-alive",
         })
 
         # Add container information if we have it
