@@ -4,6 +4,7 @@ import warnings
 
 from ddtrace.utils.deprecation import deprecation, deprecated, format_message
 from ddtrace.utils.formats import asbool, get_env, flatten_dict
+from ddtrace.utils.random import rand64
 
 
 class TestUtils(unittest.TestCase):
@@ -101,3 +102,11 @@ class TestUtils(unittest.TestCase):
         d = dict(A=1, B=2, C=dict(A=3, B=4, C=dict(A=5, B=6)))
         e = dict(A=1, B=2, C_A=3, C_B=4, C_C_A=5, C_C_B=6)
         self.assertEquals(flatten_dict(d, sep='_'), e)
+
+    def test_random(self):
+        m = set()
+        for i in range(0, 2**16):
+            n = next(rand64)
+            assert 0 <= n <= 2**64-1
+            assert n not in m
+            m.add(n)
