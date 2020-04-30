@@ -1,16 +1,12 @@
-# stdlib
 import ddtrace
 from json import loads
 import socket
 
-# project
 from .encoding import Encoder, JSONEncoder
 from .compat import httplib, PYTHON_VERSION, PYTHON_INTERPRETER, get_connection_response
 from .internal.logger import get_logger
 from .internal.runtime import container
-from .payload import Payload, PayloadFull
 from .utils.deprecation import deprecated
-from .utils import time
 
 
 log = get_logger(__name__)
@@ -178,8 +174,7 @@ class API(object):
         if version == self._version:
             return
         self._version = version
-        self._traces = _VERSIONS[version]['traces']
-        self._services = _VERSIONS[version]['services']
+        self._traces_endpoint = _VERSIONS[version]['traces']
         self._fallback = _VERSIONS[version]['fallback']
         self._compatibility_mode = _VERSIONS[version]['compatibility_mode']
         if self._compatibility_mode:
@@ -198,56 +193,20 @@ class API(object):
         """
         self._set_version(self._fallback)
 
-    def send_traces(self, traces):
-        """Send traces to the API.
+    @property
+    def encoder(self):
+        return self._encoder
 
-        :param traces: A list of traces.
-        :return: The list of API HTTP responses.
-        """
-        if not traces:
-            return []
+    def send_trace_payload(self, payload):
+        headers = {self.TRACE_COUNT_HEADER: str(payload.length)}
 
-        with time.StopWatch() as sw:
-            responses = []
-            payload = Payload(encoder=self._encoder)
-            for trace in traces:
-                try:
-                    payload.add_trace(trace)
-                except PayloadFull:
-                    # Is payload full or is the trace too big?
-                    # If payload is not empty, then using a new Payload might allow us to fit the trace.
-                    # Let's flush the Payload and try to put the trace in a new empty Payload.
-                    if not payload.empty:
-                        responses.append(self._flush(payload))
-                        # Create a new payload
-                        payload = Payload(encoder=self._encoder)
-                        try:
-                            # Add the trace that we were unable to add in that iteration
-                            payload.add_trace(trace)
-                        except PayloadFull:
-                            # If the trace does not fit in a payload on its own, that's bad. Drop it.
-                            log.warning('Trace %r is too big to fit in a payload, dropping it', trace)
-
-            # Check that the Payload is not empty:
-            # it could be empty if the last trace was too big to fit.
-            if not payload.empty:
-                responses.append(self._flush(payload))
-
-        log.debug('reported %d traces in %.5fs', len(traces), sw.elapsed())
-
-        return responses
-
-    def _flush(self, payload):
-        try:
-            response = self._put(self._traces, payload.get_payload(), payload.length)
-        except (httplib.HTTPException, OSError, IOError) as e:
-            return e
+        response = self._put(self._traces_endpoint, payload.get_payload(), headers)
 
         # the API endpoint is not available so we should downgrade the connection and re-try the call
         if response.status in [404, 415] and self._fallback:
-            log.debug("calling endpoint '%s' but received %s; downgrading API", self._traces, response.status)
+            log.debug("calling endpoint '%s' but received %s; downgrading API", self._traces_endpoint, response.status)
             self._downgrade()
-            return self._flush(payload)
+            return self.send_trace_payload(payload)
 
         return response
 
@@ -255,9 +214,10 @@ class API(object):
     def send_services(self, *args, **kwargs):
         return
 
-    def _put(self, endpoint, data, count):
-        headers = self._headers.copy()
-        headers[self.TRACE_COUNT_HEADER] = str(count)
+    def _put(self, endpoint, data, headers=None):
+        _headers = self._headers.copy()
+        if headers:
+            _headers.update(headers)
 
         if self.uds_path is None:
             if self.https:
@@ -268,7 +228,7 @@ class API(object):
             conn = UDSHTTPConnection(self.uds_path, self.https, self.hostname, self.port, timeout=self.TIMEOUT)
 
         try:
-            conn.request('PUT', endpoint, data, headers)
+            conn.request('PUT', endpoint, data, _headers)
 
             # Parse the HTTPResponse into an API.Response
             # DEV: This will call `resp.read()` which must happen before the `conn.close()` below,
@@ -277,3 +237,106 @@ class API(object):
             return Response.from_http_response(resp)
         finally:
             conn.close()
+
+
+class PayloadFull(Exception):
+    """The payload is full."""
+
+    def __init__(self, next_payload):
+        self.next_payload = next_payload
+
+
+class TraceTooBig(Exception):
+    """The payload is full."""
+    pass
+
+
+class Payload(object):
+    """
+    Trace agent API payload buffer class
+
+    This class is used to encoded and store traces to build the payload we send to
+    the trace agent.
+
+    DEV: We encoded and buffer traces so that we can reliable determine the size of
+         the payload easily so we can flush based on the payload size.
+    """
+    __slots__ = ('traces', 'size', 'encoder', 'max_payload_size')
+
+    # Trace agent limit payload size of 10 MB
+    # 5 MB should be a good average efficient size
+    DEFAULT_MAX_PAYLOAD_SIZE = 5 * 1000000
+
+    def __init__(self, encoder=None, max_payload_size=DEFAULT_MAX_PAYLOAD_SIZE):
+        """
+        Constructor for Payload
+
+        :param encoder: The encoded to use, default is the default encoder
+        :type encoder: ``ddtrace.encoding.Encoder``
+        :param max_payload_size: The max number of bytes a payload should be before
+            being considered full (default: 5mb)
+        """
+        self.max_payload_size = max_payload_size
+        self.encoder = encoder or Encoder()
+        self.traces = []
+        self.size = 0
+
+    def add_trace(self, trace):
+        """
+        Encode and append a trace to this payload
+
+        :param trace: A trace to append
+        :type trace: A list of :class:`ddtrace.span.Span`
+        """
+        # No trace or empty trace was given, ignore
+        if not trace:
+            return
+
+        # Encode the trace, append, and add its length to the size
+        encoded = self.encoder.encode_trace(trace)
+        if len(encoded) > self.max_payload_size:
+            log.warning('Trace %r is too big to fit in a payload, dropping it', trace)
+            raise TraceTooBig()
+        elif len(encoded) + self.size > self.max_payload_size:
+            # Start the next payload
+            next_payload = Payload(self.encoder)
+            next_payload.traces.append(encoded)
+            raise PayloadFull(encoded)
+
+        self.traces.append(encoded)
+        self.size += len(encoded)
+
+    @property
+    def length(self):
+        """
+        Get the number of traces in this payload
+
+        :returns: The number of traces in the payload
+        :rtype: int
+        """
+        return len(self.traces)
+
+    @property
+    def empty(self):
+        """
+        Whether this payload is empty or not
+
+        :returns: Whether this payload is empty or not
+        :rtype: bool
+        """
+        return self.length == 0
+
+    def get_payload(self):
+        """
+        Get the fully encoded payload
+
+        :returns: The fully encoded payload
+        :rtype: str | bytes
+        """
+        # DEV: `self.traces` is an array of encoded traces, `join_encoded` joins them together
+        return self.encoder.join_encoded(self.traces)
+
+    def __repr__(self):
+        """Get the string representation of this payload"""
+        return '{0}(length={1}, size={2} B, max_payload_size={3} B)'.format(
+            self.__class__.__name__, self.length, self.size, self.max_payload_size)

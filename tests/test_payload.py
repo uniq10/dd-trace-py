@@ -1,7 +1,7 @@
 import math
 
 from ddtrace.encoding import Encoder, JSONEncoder
-from ddtrace.payload import Payload, PayloadFull
+from ddtrace.api import Payload, PayloadFull
 from ddtrace.span import Span
 
 from .base import BaseTracerTestCase
