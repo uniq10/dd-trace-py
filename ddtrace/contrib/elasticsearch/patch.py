@@ -13,7 +13,14 @@ from ...settings import config
 
 
 def _es_modules():
-    module_names = ('elasticsearch', 'elasticsearch1', 'elasticsearch2', 'elasticsearch5', 'elasticsearch6', 'elasticsearch7')
+    module_names = (
+        "elasticsearch",
+        "elasticsearch1",
+        "elasticsearch2",
+        "elasticsearch5",
+        "elasticsearch6",
+        "elasticsearch7",
+    )
     for module_name in module_names:
         try:
             yield import_module(module_name)
@@ -28,10 +35,10 @@ def patch():
 
 
 def _patch(elasticsearch):
-    if getattr(elasticsearch, '_datadog_patch', False):
+    if getattr(elasticsearch, "_datadog_patch", False):
         return
-    setattr(elasticsearch, '_datadog_patch', True)
-    _w(elasticsearch.transport, 'Transport.perform_request', _get_perform_request(elasticsearch))
+    setattr(elasticsearch, "_datadog_patch", True)
+    _w(elasticsearch.transport, "Transport.perform_request", _get_perform_request(elasticsearch))
     Pin(service=metadata.SERVICE, app=metadata.APP).onto(elasticsearch.transport.Transport)
 
 
@@ -41,9 +48,9 @@ def unpatch():
 
 
 def _unpatch(elasticsearch):
-    if getattr(elasticsearch, '_datadog_patch', False):
-        setattr(elasticsearch, '_datadog_patch', False)
-        _u(elasticsearch.transport.Transport, 'perform_request')
+    if getattr(elasticsearch, "_datadog_patch", False):
+        setattr(elasticsearch, "_datadog_patch", False)
+        _u(elasticsearch.transport.Transport, "perform_request")
 
 
 def _get_perform_request(elasticsearch):
@@ -52,7 +59,7 @@ def _get_perform_request(elasticsearch):
         if not pin or not pin.enabled():
             return func(*args, **kwargs)
 
-        with pin.tracer.trace('elasticsearch.query', span_type=SpanTypes.ELASTICSEARCH) as span:
+        with pin.tracer.trace("elasticsearch.query", span_type=SpanTypes.ELASTICSEARCH) as span:
             span.set_tag(SPAN_MEASURED_KEY)
 
             # Don't instrument if the trace is not sampled
@@ -60,8 +67,8 @@ def _get_perform_request(elasticsearch):
                 return func(*args, **kwargs)
 
             method, url = args
-            params = kwargs.get('params')
-            body = kwargs.get('body')
+            params = kwargs.get("params")
+            body = kwargs.get("body")
 
             span.service = pin.service
             span.set_tag(metadata.METHOD, method)
@@ -69,22 +76,19 @@ def _get_perform_request(elasticsearch):
             span.set_tag(metadata.PARAMS, urlencode(params))
             if config.elasticsearch.trace_query_string:
                 span.set_tag(http.QUERY_STRING, urlencode(params))
-            if method == 'GET':
+            if method == "GET":
                 span.set_tag(metadata.BODY, instance.serializer.dumps(body))
             status = None
 
             # set analytics sample rate
-            span.set_tag(
-                ANALYTICS_SAMPLE_RATE_KEY,
-                config.elasticsearch.get_analytics_sample_rate()
-            )
+            span.set_tag(ANALYTICS_SAMPLE_RATE_KEY, config.elasticsearch.get_analytics_sample_rate())
 
             span = quantize(span)
 
             try:
                 result = func(*args, **kwargs)
             except elasticsearch.exceptions.TransportError as e:
-                span.set_tag(http.STATUS_CODE, getattr(e, 'status_code', 500))
+                span.set_tag(http.STATUS_CODE, getattr(e, "status_code", 500))
                 raise
 
             try:
@@ -97,7 +101,7 @@ def _get_perform_request(elasticsearch):
                     # that just returns the body
                     data = result
 
-                took = data.get('took')
+                took = data.get("took")
                 if took:
                     span.set_metric(metadata.TOOK, int(took))
             except Exception:
@@ -107,6 +111,7 @@ def _get_perform_request(elasticsearch):
                 span.set_tag(http.STATUS_CODE, status)
 
             return result
+
     return _perform_request
 
 
@@ -115,6 +120,7 @@ def _get_perform_request(elasticsearch):
 try:
     # DEV: Import as `es` to not shadow loop variables above
     import elasticsearch as es
+
     _perform_request = _get_perform_request(es)
 except ImportError:
     pass
