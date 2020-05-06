@@ -2,6 +2,9 @@
 import ddtrace
 from json import loads
 import socket
+import requests
+
+session = requests.Session()
 
 # project
 from .encoding import Encoder, JSONEncoder
@@ -59,8 +62,8 @@ class Response(object):
         :returns: A new ``Response``
         """
         return cls(
-            status=resp.status,
-            body=resp.read(),
+            status=resp.status_code,
+            body=resp.content,
             reason=getattr(resp, 'reason', None),
             msg=getattr(resp, 'msg', None),
         )
@@ -259,21 +262,23 @@ class API(object):
         headers = self._headers.copy()
         headers[self.TRACE_COUNT_HEADER] = str(count)
 
-        if self.uds_path is None:
-            if self.https:
-                conn = httplib.HTTPSConnection(self.hostname, self.port, timeout=self.TIMEOUT)
-            else:
-                conn = httplib.HTTPConnection(self.hostname, self.port, timeout=self.TIMEOUT)
-        else:
-            conn = UDSHTTPConnection(self.uds_path, self.https, self.hostname, self.port, timeout=self.TIMEOUT)
-
+        # if self.uds_path is None:
+        #     if self.https:
+        #         conn = httplib.HTTPSConnection(self.hostname, self.port, timeout=self.TIMEOUT)
+        #     else:
+        #         conn = httplib.HTTPConnection(self.hostname, self.port, timeout=self.TIMEOUT)
+        # else:
+        #     conn = UDSHTTPConnection(self.uds_path, self.https, self.hostname, self.port, timeout=self.TIMEOUT)
         try:
-            conn.request('PUT', endpoint, data, headers)
+            url = "http://%s:%s%s" % (self.hostname, self.port, endpoint)
+            resp = session.put(url, headers=headers, data=data)
 
+            # conn.request('PUT', endpoint, data, headers)
             # Parse the HTTPResponse into an API.Response
             # DEV: This will call `resp.read()` which must happen before the `conn.close()` below,
             #      if we call `.close()` then all future `.read()` calls will return `b''`
-            resp = get_connection_response(conn)
+            # resp = get_connection_response(conn)
             return Response.from_http_response(resp)
         finally:
-            conn.close()
+            pass
+            # conn.close()
