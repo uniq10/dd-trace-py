@@ -2,9 +2,7 @@
 import ddtrace
 from json import loads
 import socket
-import requests
-
-session = requests.Session()
+import urllib3
 
 # project
 from .encoding import Encoder, JSONEncoder
@@ -62,8 +60,8 @@ class Response(object):
         :returns: A new ``Response``
         """
         return cls(
-            status=resp.status_code,
-            body=resp.content,
+            status=resp.status,
+            body=resp.read(),
             reason=getattr(resp, 'reason', None),
             msg=getattr(resp, 'msg', None),
         )
@@ -146,6 +144,11 @@ class API(object):
 
         self._headers = headers or {}
         self._version = None
+
+        # self.pool = urllib3.HTTPConnectionPool("%s:%s" % (self.hostname, self.port), timeout=5000000)
+        # self.pool = urllib3.PoolManager(1)
+        # self.conn = urllib3.connection_from_url("http://%s:%s" % (self.hostname, self.port))
+        self.conn = httplib.HTTPConnection(self.hostname, self.port, timeout=self.TIMEOUT)
 
         if priority_sampling:
             self._set_version('v0.4', encoder=encoder)
@@ -261,6 +264,7 @@ class API(object):
     def _put(self, endpoint, data, count):
         headers = self._headers.copy()
         headers[self.TRACE_COUNT_HEADER] = str(count)
+        headers["Connection"] = "keep-alive"
 
         # if self.uds_path is None:
         #     if self.https:
@@ -270,14 +274,16 @@ class API(object):
         # else:
         #     conn = UDSHTTPConnection(self.uds_path, self.https, self.hostname, self.port, timeout=self.TIMEOUT)
         try:
-            url = "http://%s:%s%s" % (self.hostname, self.port, endpoint)
-            resp = session.put(url, headers=headers, data=data)
+            # url = "http://%s:%s%s" % (self.hostname, self.port, endpoint)
+            # resp = session.put(url, headers=headers, data=data)
+            # resp = self.pool.request("PUT", endpoint, headers=headers, data=data)
+            # resp = self.conn.request("PUT", endpoint, headers=headers, data=data)
 
-            # conn.request('PUT', endpoint, data, headers)
+            self.conn.request('PUT', endpoint, data, headers)
             # Parse the HTTPResponse into an API.Response
             # DEV: This will call `resp.read()` which must happen before the `conn.close()` below,
             #      if we call `.close()` then all future `.read()` calls will return `b''`
-            # resp = get_connection_response(conn)
+            resp = get_connection_response(self.conn)
             return Response.from_http_response(resp)
         finally:
             pass
