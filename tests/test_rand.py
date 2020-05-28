@@ -1,4 +1,5 @@
 import multiprocessing
+
 from ddtrace.internal import _rand
 
 
@@ -29,4 +30,4 @@ def test_random_fork():
     while not q.empty():
         n = q.get()
         assert n not in nums
-        num.add(n)
+        nums.add(n)

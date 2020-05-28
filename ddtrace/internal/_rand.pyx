@@ -40,15 +40,30 @@ random.randbits                    222.7103 (1.33)     367.4459 (1.74)     250.2
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 """
 from libc.stdint cimport uint64_t
+import os
 
 from ddtrace import compat
 
 
-cdef uint64_t x = compat.getrandbits(64) ^ 4101842887655102017
+_pid = os.getpid()
+
+
+def getseed():
+    x = compat.getrandbits(64) ^ 4101842887655102017
+    return x
+
+
+cdef uint64_t x = getseed()
 
 
 def rand64bits():
-    global x
+    global x, _pid
+    pid = os.getpid()
+
+    if _pid == pid:
+        _pid = pid
+        x = getseed()
+
     x ^= x >> 21
     x ^= x << 35
     x ^= x >> 4
