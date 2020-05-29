@@ -351,6 +351,57 @@ class TestAsyncioPropagation(AsyncioTestCase):
         self.test_tasks_chaining()
 
     @mark_asyncio
+    def test_create_tasks_no_parent(self):
+        @asyncio.coroutine
+        def task_coro(i):
+            with self.tracer.trace("task_{}".format(i)) as span:
+                yield from asyncio.sleep(0.01)
+
+        @asyncio.coroutine
+        def parent_coro():
+            yield from asyncio.gather(*[
+                asyncio.create_task(task_coro(1)),
+                asyncio.create_task(task_coro(2))
+            ])
+
+        yield from parent_coro()
+
+        traces = self.tracer.writer.pop_traces()
+        assert len(traces) == 2
+        assert traces[0][0].name == "task_1"
+        assert traces[1][0].name == "task_2"
+        assert traces[0][0].trace_id != traces[1][0].trace_id
+        assert traces[0][0].parent_id is None
+        assert traces[1][0].parent_id is None
+
+    @mark_asyncio
+    def test_create_tasks_parent(self):
+        @asyncio.coroutine
+        def task_coro(i):
+            with self.tracer.trace("task_{}".format(i)) as span:
+                yield from asyncio.sleep(0.01)
+
+        @asyncio.coroutine
+        def parent_coro():
+            with self.tracer.trace("parent_task"):
+                yield from asyncio.gather(*[
+                    asyncio.create_task(task_coro(1)),
+                    asyncio.create_task(task_coro(2))
+                ])
+
+        yield from parent_coro()
+
+        traces = self.tracer.writer.pop_traces()
+        assert len(traces) == 3
+        assert traces[0][0].name == "task_1"
+        assert traces[1][0].name == "task_2"
+        assert traces[2][0].name == "parent_task"
+        assert traces[0][0].trace_id == traces[2][0].trace_id
+        assert traces[0][0].parent_id == traces[2][0].span_id
+        assert traces[1][0].trace_id == traces[2][0].trace_id
+        assert traces[1][0].parent_id == traces[2][0].span_id
+
+    @mark_asyncio
     def test_trace_multiple_coroutines_ot_outer(self):
         """OpenTracing version of test_trace_multiple_coroutines."""
         # if multiple coroutines have nested tracing, they must belong
