@@ -4,8 +4,11 @@
  Configuration
 ===============
 
-`ddtrace` can be configured using environment variable. They are listed
-below:
+`ddtrace` can be configured using the environment variables listed below:
+
+
+Tracer
+======
 
 .. list-table::
    :widths: 3 1 1 4
@@ -43,11 +46,6 @@ below:
      -
      - Set an application's version in traces and logs e.g. ``1.2.3``,
        ``6c44da20``, ``2020.02.13``. Added in ``v0.36.0``.
-   * - ``DD_SITE``
-     - String
-     - datadoghq.com
-     - Specify which site to use for uploading profiles. Set to
-       ``datadoghq.eu`` to use EU site.
    * - ``DATADOG_TRACE_ENABLED``
      - Boolean
      - True
@@ -77,7 +75,7 @@ below:
      - The URL to use to connect the Datadog agent. The url can starts with
        ``http://`` to connect using HTTP or with ``unix://`` to use a Unix
        Domain Socket.
-   * - ``DATADOG_TRACE_AGENT_HOSTNAME``
+   * - ``DD_AGENT_HOST``
      - String
      -
      - Deprecated: use ``DD_TRACE_AGENT_URL``
@@ -85,11 +83,44 @@ below:
      - Integer
      -
      - Deprecated: use ``DD_TRACE_AGENT_URL``
-   * - ``DD_PROFILING_API_TIMEOUT``
-     - Float
-     - 10
-     - The timeout in seconds before dropping events if the HTTP API does not
-       reply.
+
+
+Profiler
+========
+
+.. list-table::
+   :widths: 3 1 1 4
+   :header-rows: 1
+
+   * - Variable Name
+     - Type
+     - Default value
+     - Description
+   * - ``DD_ENV``
+     - String
+     -
+     - Set an application's environment e.g. ``prod``, ``pre-prod``, ``stage``.
+   * - ``DD_SERVICE``
+     - String
+     - (autodetected)
+     - Set the service name to be used for this application. A default is
+       provided for these integrations: :ref:`bottle`, :ref:`flask`, :ref:`grpc`,
+       :ref:`pyramid`, :ref:`pylons`, :ref:`tornado`, :ref:`celery`, :ref:`django` and
+       :ref:`falcon`.
+   * - ``DD_TAGS``
+     - String
+     -
+     - Set global tags to be attached to every profile. e.g. ``key1:value1,key2,value2``.
+   * - ``DD_VERSION``
+     - String
+     -
+     - Set an application's version in traces and logs e.g. ``1.2.3``,
+       ``6c44da20``, ``2020.02.13``.
+   * - ``DD_SITE``
+     - String
+     - datadoghq.com
+     - Specify which site to use for uploading profiles. Set to
+       ``datadoghq.eu`` to use EU site.
    * - ``DD_API_KEY``
      - String
      -
@@ -102,7 +133,7 @@ below:
      - Float
      - 2
      - The percentage of maximum time the stack profiler can use when computing
-       statistics. Must be greather than 0 and lesser or equal to 100.
+       statistics. Must be greater than 0 and lesser or equal to 100.
    * - ``DD_PROFILING_MAX_FRAMES``
      - Integer
      - 64
